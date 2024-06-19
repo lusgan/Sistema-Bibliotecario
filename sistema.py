@@ -9,72 +9,78 @@ class Livro:
         self.emprestado = False
         self.ISBN = ISBN
 
-
-
 class Usuario:
     def __init__(self, Registro_Academico, nome, email):
         self.nome = nome
         self.email = email
         self.Registro_Academico = Registro_Academico
-        
+        self.data_ultima_penalidade = None
+        self.historico_de_emprestimos = []
+        self.historico_de_penalidades = []
 
+    def penalizar(self, data_de_hoje, emprestimo):
+        self.data_ultima_penalidade = data_de_hoje + timedelta(days=15)
+        self.historico_de_penalidades.append(emprestimo)
+        print("Livro entregue com atraso, usuario sera penalizado")
+
+    def possui_penalidade(self, data):
+        if self.data_ultima_penalidade is None or data > self.data_ultima_penalidade:
+            return False
+        else:
+            return True
 
 class Emprestimo:
-    
-    def __init__(self,dataInicial,dataFinal,Livro, Usuario):
-        self.dataInicial = dataInicial
-        self.dataFinal = dataFinal
+    def __init__(self):
+        self.id = None
+        self.dataInicial = None
+        self.dataFinal = None
         self.dia_que_foi_devolvido = None
+        self.Livro = None
+        self.Usuario = None
+
+    def devolver(self, data):
+        self.Livro.emprestado = False
+        self.dia_que_foi_devolvido = data
+        if data > self.dataFinal:
+            self.Usuario.penalizar(data, self)
+
+    def emprestar(self, id_emprestimo, data_hoje, Livro, Usuario):
+        
+        Livro.emprestado = True
+        self.id = id_emprestimo
+        self.dataInicial = data_hoje
+        self.dataFinal = data_hoje + timedelta(days=7)
         self.Livro = Livro
         self.Usuario = Usuario
-        
-    def devolvido(self,data):
-        self.dia_que_foi_devolvido = data
-        
-
-
-
-
-
-class Historico:
-    def __init__(self, Registro_Academico):
-        self.Registro_Academico = Registro_Academico
-        self.lista_datas_livrosEmprestados = {}  # dicionário contendo data do empréstimo e livro {'2024-06-12':'quimica organica'}
-
-
-
-
+            
 
 class Biblioteca:
     def __init__(self):
-        self.livros = []  # [Livro :: livros]
-        self.exemplares = {}  # {ISBN : [livros]}
+        self.livros = []
+        self.exemplares = {}
         self.usuarios = []
-        self.emprestimos = [] # todos os emprestimos realizados na biblioteca
-    
+        self.emprestimos = []
+
     def add_Livro(self, Livro):
-        if not Livro.ISBN in [liv.ISBN for liv in self.livros]:
+        if Livro.ISBN not in [liv.ISBN for liv in self.livros]:
             self.livros.append(Livro)
-        
         self.add_exemplar(Livro)
-        
+
     def add_exemplar(self, Livro):
-        
-        if Livro.ISBN not in self.exemplares.keys():
+        if Livro.ISBN not in self.exemplares:
             self.exemplares[Livro.ISBN] = [Livro]
-        
         else:
             if Livro not in self.exemplares[Livro.ISBN]:
                 self.exemplares[Livro.ISBN].append(Livro)
             else:
                 print("Livro já cadastrado!")
-        
+
     def get_Livros(self):
         return self.livros
-        
+
     def get_exemplares(self, Livro):
-        return self.exemplares[Livro.titulo]
-    
+        return self.exemplares[Livro.ISBN]
+
     def listar_livros(self):
         print("-" * 50)
         print("Livros:")
@@ -82,7 +88,7 @@ class Biblioteca:
             print(f"Título: {livro.titulo}  Autores: {livro.autores}   Ano: {livro.ano}   ISBN: {livro.ISBN}")
         print(f"\nTotal de livros = {len(self.livros)}")
         print("-" * 50)
-    
+
     def listar_exemplares(self, Livro):
         if Livro.ISBN in self.exemplares:
             print(f"Exemplares do livro {Livro.titulo}:")
@@ -91,26 +97,23 @@ class Biblioteca:
             print(f"\nTotal de exemplares = {len(self.exemplares[Livro.ISBN])}")
         else:
             print("Livro não cadastrado!\n")
-            
-    
-    def cadastrarUsuario(self,Usuario):
+
+    def cadastrarUsuario(self, Usuario):
         self.usuarios.append(Usuario)
-    
-    def emprestarLivro(self,dataInicial,Livro,Usuario):
-        
-        prazo = 7 #7 dias para devolver
-        emprestimo = Emprestimo(dataInicial,dataInicial+timedelta(days=prazo),Livro,Usuario)
-        self.emprestimos.append(emprestimo)
-        Livro.emprestado = True
-    
-    def devolverLivro(self,Livro,dia):
-        Livro.emprestado = False
-        
+
+    def emprestarLivro(self, data_hoje, Livro, Usuario):
+        if not Usuario.possui_penalidade(data_hoje):
+            emprestimo = Emprestimo()
+            emprestimo.emprestar(len(self.emprestimos), data_hoje, Livro, Usuario)
+            self.emprestimos.append(emprestimo)
+            Usuario.historico_de_emprestimos.append(emprestimo)
+        else:
+            print(f"Usuário está atualmente sob penalidade. Aguardar até o dia {Usuario.data_ultima_penalidade}")
+
+    def devolverLivro(self, Livro, dia):
         for emprestimo in self.emprestimos:
             if emprestimo.Livro == Livro:
-                emprestimo.dia_que_foi_devolvido = dia
-    
-    
+                emprestimo.devolver(dia)
 
 # Teste das funcionalidades
 biblioteca = Biblioteca()
@@ -136,20 +139,21 @@ livros = [
 
 # Adicionando 3 exemplares de cada livro na biblioteca
 for livro in livros:
-    
     for id in range(3):
-        copia = Livro(id,livro.titulo,livro.autores,livro.ano,livro.ISBN)
+        copia = Livro(id, livro.titulo, livro.autores, livro.ano, livro.ISBN)
         biblioteca.add_Livro(copia)
-        
 
 # Listar todos os livros na biblioteca
 biblioteca.listar_livros()
 
-
-
-usuario1 = Usuario(101,"Lucas","apapa")
+# Cadastrar um usuário
+usuario1 = Usuario(101, "Lucas", "apapa@example.com")
 biblioteca.cadastrarUsuario(usuario1)
-biblioteca.emprestarLivro(datetime(2024,6,18), biblioteca.exemplares[6][0], usuario1)
+
+# Escolher um livro para emprestar
+livroEscolhido = biblioteca.exemplares[1][0]
+biblioteca.emprestarLivro(datetime(2024, 6, 18), livroEscolhido, usuario1)
 
 # Listar exemplares de um dos livros
-biblioteca.listar_exemplares(livros[5])
+biblioteca.listar_exemplares(livros[0])
+
